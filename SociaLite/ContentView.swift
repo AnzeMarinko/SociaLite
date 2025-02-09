@@ -30,6 +30,13 @@ struct ContentView: View {
                     }
                     .navigationTitle("SociaLite")
                     .preferredColorScheme(.dark)  // Aktiviraj temni način
+                    
+                    // Gumb za osvežitev videov
+                    Button("🔄 Osveži videe") {
+                        fetchVideos()
+                    }
+                    .padding()
+                    .foregroundColor(.blue)
                 }
             }
             
@@ -46,7 +53,7 @@ struct ContentView: View {
                     
                     Form {
                         Section(header: Text("🔑 API ključ")) {
-                            if apiKey.isEmpty {
+                            if (apiKey.isEmpty) {
                                 TextField("Vnesi API ključ", text: $apiKey)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                     .disableAutocorrection(true)
@@ -87,6 +94,7 @@ struct ContentView: View {
                                     UserDefaults.standard.setValue(channels, forKey: "channels")
                                     channelId = ""
                                     channelName = ""
+                                    fetchVideos()  // Po dodajanju kanala osveži videe
                                 }
                             }
                         }
@@ -97,6 +105,7 @@ struct ContentView: View {
                                     Text(channels[channelId] ?? "Neznan kanal")
                                     Spacer()
                                     
+                                    // Gumb za skritje ali prikaz kanala
                                     if hiddenChannels.contains(channelId) {
                                         Button("👁 Prikaži") {
                                             hiddenChannels.removeAll { $0 == channelId }
@@ -112,6 +121,9 @@ struct ContentView: View {
                                     Button("🗑 Odstrani") {
                                         channels.removeValue(forKey: channelId)
                                         UserDefaults.standard.setValue(channels, forKey: "channels")
+                                        // Skrbno odstrani tudi skrite kanale
+                                        hiddenChannels.removeAll { $0 == channelId }
+                                        UserDefaults.standard.setValue(hiddenChannels, forKey: "hiddenChannels")
                                     }
                                     .foregroundColor(.red)
                                 }
