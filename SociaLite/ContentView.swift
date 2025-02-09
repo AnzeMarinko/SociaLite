@@ -4,6 +4,7 @@ import WebKit
 struct ContentView: View {
     @State private var showSettings = false
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "apiKey") ?? ""
+    @State private var inputAPIKey: String = ""  // Lokalna spremenljivka za vnos
     @State private var channelId: String = ""
     @State private var channelName: String = ""
     @State private var channels: [String: String] = UserDefaults.standard.dictionary(forKey: "channels") as? [String: String] ?? [:]
@@ -42,63 +43,17 @@ struct ContentView: View {
             
             if showSettings {
                 VStack {
-                    HStack {
-                        Button("❌ Zapri") {
-                            showSettings.toggle()
-                        }
-                        .padding()
-                        Spacer()
-                    }
-                    .background(Color.gray.opacity(0.8))
+                    
                     
                     Form {
-                        Section(header: Text("🔑 API ključ")) {
-                            if (apiKey.isEmpty) {
-                                TextField("Vnesi API ključ", text: $apiKey)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .disableAutocorrection(true)
-                                    .autocapitalization(.none)
-                                
-                                Button("Shrani API ključ") {
-                                    UserDefaults.standard.setValue(apiKey, forKey: "apiKey")
-                                }
-                            } else {
-                                Text("API ključ je shranjen")
-                                    .foregroundColor(.green)
+                        HStack {
+                            Button("❌ Zapri nastavitve") {
+                                showSettings.toggle()
                             }
-                            
-                            Button("❌ Odstrani API ključ") {
-                                apiKey = ""
-                                UserDefaults.standard.removeObject(forKey: "apiKey")
-                            }
-                            .foregroundColor(.red)
+                            .padding()
+                            Spacer()
                         }
-                        
-                        Section(header: Text("📺 Dodaj YouTube kanal")) {
-                            TextField("Vnesi ID kanala", text: $channelId)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .onChange(of: channelId) { newId in
-                                    if !newId.isEmpty {
-                                        fetchChannelName(from: newId)
-                                    }
-                                }
-                            
-                            if !channelName.isEmpty {
-                                Text("Ime kanala: \(channelName)")
-                                    .foregroundColor(.green)
-                            }
-                            
-                            Button("➕ Dodaj kanal") {
-                                if !channelId.isEmpty && !channelName.isEmpty {
-                                    channels[channelId] = channelName
-                                    UserDefaults.standard.setValue(channels, forKey: "channels")
-                                    channelId = ""
-                                    channelName = ""
-                                    fetchVideos()  // Po dodajanju kanala osveži videe
-                                }
-                            }
-                        }
-
+                    
                         Section(header: Text("📌 Seznam kanalov")) {
                             ForEach(channels.keys.sorted(), id: \.self) { channelId in
                                 HStack {
@@ -129,32 +84,74 @@ struct ContentView: View {
                                 }
                             }
                         }
+                        
+                        Section(header: Text("🔑 API ključ")) {
+                            if (apiKey.isEmpty) {
+                                TextField("Vnesi API ključ", text: $inputAPIKey)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .disableAutocorrection(true)
+                                    .autocapitalization(.none)
+                                
+                                Button("Shrani API ključ") {
+                                    apiKey = inputAPIKey
+                                    UserDefaults.standard.setValue(apiKey, forKey: "apiKey")
+                                }
+                            } else {
+                                Text("API ključ je shranjen")
+                                    .foregroundColor(.green)
+                            }
+                            
+                            Button("❌ Odstrani API ključ") {
+                                apiKey = ""
+                                UserDefaults.standard.removeObject(forKey: "apiKey")
+                            }
+                            .foregroundColor(.red)
+                            Text("API ključ je potreben za pridobivanje videov. Pridobite ga v Google Cloud Console, kjer morate omogočiti tudi YouTube Data API v3. API ključ je shranjen samo lokalno v aplikaciji.")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Section(header: Text("📺 Dodaj YouTube kanal")) {
+                            TextField("Vnesi ID kanala", text: $channelId)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .onChange(of: channelId) { newId in
+                                    if !newId.isEmpty {
+                                        fetchChannelName(from: newId)
+                                    }
+                                }
+                            
+                            if !channelName.isEmpty {
+                                Text("Ime kanala: \(channelName)")
+                                    .foregroundColor(.green)
+                            }
+                            
+                            Button("➕ Dodaj kanal") {
+                                if !channelId.isEmpty && !channelName.isEmpty {
+                                    channels[channelId] = channelName
+                                    UserDefaults.standard.setValue(channels, forKey: "channels")
+                                    channelId = ""
+                                    channelName = ""
+                                    fetchVideos()  // Po dodajanju kanala osveži videe
+                                }
+                            }
+                        }
 
                         Section(header: Text("🔍 Iskalnik ID-jev")) {
                             Link("Poišči ID kanala", destination: URL(string: "https://www.tunepocket.com/youtube-channel-id-finder/#channle-id-finder-form")!)
                                 .foregroundColor(.blue)
-                            Text("Poiščite ID kanala, ki ga želite spremljati. ID kanala najdete na povezavi ali v URL-ju kanala.")
+                            Text("Poiščite ID kanala, ki ga želite spremljati. V aplikaciji boste videli zadnje 3 objave vsakega izbranega kanala. Priporočamo, da sledite malemu številu kanalov.")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
                         
                         Section {
                             Link("Anže Marinko (anzemarinko.github.io)", destination: URL(string: "https://anzemarinko.github.io")!)
-                                .font(.caption)
                                 .foregroundColor(.blue)
                         }
                     }
                     .background(Color.white)
                     .cornerRadius(10)
                     .padding()
-                    
-                    Spacer()
-                    
-                    Button("Nazaj na videe") {
-                        showSettings.toggle()
-                    }
-                    .padding()
-                    .foregroundColor(.blue)
                 }
                 .background(Color.black.opacity(0.6))
                 .edgesIgnoringSafeArea(.all)
