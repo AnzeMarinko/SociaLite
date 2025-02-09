@@ -114,18 +114,9 @@ struct ContentView: View {
                         Section(header: Text("📺 Dodaj YouTube kanal")) {
                             TextField("Vnesi ID kanala", text: $channelId)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .onChange(of: channelId) { newId in
-                                    if !newId.isEmpty {
-                                        fetchChannelName(from: newId)
-                                    }
-                                }
-                            
-                            if !channelName.isEmpty {
-                                Text("Ime kanala: \(channelName)")
-                                    .foregroundColor(.green)
-                            }
                             
                             Button("➕ Dodaj kanal") {
+                                fetchChannelName(from: channelId)
                                 if !channelId.isEmpty && !channelName.isEmpty {
                                     channels[channelId] = channelName
                                     UserDefaults.standard.setValue(channels, forKey: "channels")
@@ -163,10 +154,13 @@ struct ContentView: View {
         guard !apiKey.isEmpty else { return }
         
         let url = "https://www.googleapis.com/youtube/v3/channels?key=\(apiKey)&id=\(channelId)&part=snippet"
-        
         guard let requestUrl = URL(string: url) else { return }
         
         URLSession.shared.dataTask(with: requestUrl) { data, _, error in
+            if let error = error {
+                print("Napaka pri nalaganju podatkov: \(error.localizedDescription)")
+                return
+            }
             if let data = data, let response = try? JSONDecoder().decode(YouTubeChannelResponse.self, from: data) {
                 DispatchQueue.main.async {
                     if let name = response.items.first?.snippet.title {
@@ -181,20 +175,31 @@ struct ContentView: View {
         guard !apiKey.isEmpty else { return }
         
         var fetchedVideos: [Video] = []
+        let group = DispatchGroup()  // Uporabimo DispatchGroup za usklajevanje asinhronih nalog
         
         for channelId in channels.keys {
             let url = "https://www.googleapis.com/youtube/v3/videos?key=\(apiKey)&channelId=\(channelId)&part=snippet,contentDetails&maxResults=3"
-            
             guard let requestUrl = URL(string: url) else { continue }
             
+            group.enter()  // Vstopimo v DispatchGroup za spremljanje naloge
+            
             URLSession.shared.dataTask(with: requestUrl) { data, _, error in
-                if let data = data, let response = try? JSONDecoder().decode(YouTubeResponse.self, from: data) {
-                    DispatchQueue.main.async {
-                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id, title: $0.snippet.title, channelId: channelId, duration: $0.contentDetails.duration) })
-                        videos = fetchedVideos.sorted { $0.id > $1.id }
-                    }
+                if let error = error {
+                    print("Napaka pri nalaganju podatkov: \(error.localizedDescription)")
+                    return
                 }
+                if let data = data, let response = try? JSONDecoder().decode(YouTubeResponse.self, from: data) {
+                    print("data: \(data)")
+                    fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id, title: $0.snippet.title, channelId: channelId, duration: $0.contentDetails.duration) })
+                }
+                group.leave()  // Opuščamo nalogo v DispatchGroup
             }.resume()
+        }
+        print("fetchedVideos: \(fetchedVideos)")
+        
+        // Počakamo, da se vse naloge zaključijo, nato posodobimo stanje
+        group.notify(queue: .main) {
+            self.videos = fetchedVideos.sorted { $0.id > $1.id }
         }
     }
 }
@@ -244,7 +249,7 @@ struct VideoView: View {
 
     var body: some View {
         VStack {
-            WebView(url: URL(string: "https://www.youtube-nocookie.com/embed/\(video.id)?rel=0&modestbranding=1&controls=1")!)
+            WebView(url: URL(string: "https://www.youtube-nocookie.com/embed/\(video.id)?rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=1")!)
                 .frame(height: 200)
             
             Text(video.title)
