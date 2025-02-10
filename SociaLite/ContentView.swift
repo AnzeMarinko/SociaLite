@@ -14,22 +14,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             NavigationView {
-                VStack {
-                    HStack {
-                        // Gumb za nastavitve
-                        Button("⚙️ Nastavitve") {
-                            showSettings.toggle()
-                        }
-                        .foregroundColor(.orange)
-                        Spacer()
-                        
-                        // Gumb za osvežitev videov
-                        Button("🔄 Osveži videe") {
-                            fetchVideos()
-                        }
-                        .foregroundColor(.orange)
-                    }
-                    
+                
                     // Seznam videov
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 250))]) {
@@ -38,12 +23,40 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .navigationTitle("SociaLite").foregroundColor(.orange)
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            VStack {
+                                HStack {
+                                    // Gumb za nastavitve
+                                    Button("⚙️ Nastavitve") {
+                                        showSettings.toggle()
+                                    }
+                                    .foregroundColor(.orange)
+                                    Spacer()
+                                    
+                                    // Gumb za osvežitev videov
+                                    Button("🔄 Osveži") {
+                                        fetchVideos()
+                                    }
+                                    .foregroundColor(.orange)
+                                }
+                                HStack {
+                                    Image("logo") // Uporabi ime slike iz Assets
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 30, height: 30)
+                                    Text("SociaLite")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                }
+                            }
+                        }
+                    }
+                    .foregroundColor(.orange)
                     .preferredColorScheme(.dark)  // Aktiviraj temni način
                     .onAppear {
                         loadVideos()
                     }
-                }
             }
             
             if showSettings {
@@ -348,12 +361,27 @@ struct VideoView: View {
     }
 }
 
-// WebView za prikaz YouTube videov
 struct WebView: UIViewRepresentable {
     let url: URL
 
     func makeUIView(context: Context) -> WKWebView {
-        return WKWebView()
+        let webView = WKWebView()
+
+        // Omogoči predvajanje medijev v aplikaciji
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true // Omogoči predvajanje video vsebine v aplikaciji (inline)
+
+        let webViewWithConfig = WKWebView(frame: .zero, configuration: configuration)
+
+        // Prepreči izklop zaslona med predvajanjem videa
+        UIApplication.shared.isIdleTimerDisabled = true
+
+        // Počisti settinge, ko aplikacija preide v ozadje (ko uporabnik zapusti aplikacijo)
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            UIApplication.shared.isIdleTimerDisabled = false // Omogoči ponovno spanje zaslona, ko gre aplikacija v ozadje
+        }
+
+        return webViewWithConfig
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
