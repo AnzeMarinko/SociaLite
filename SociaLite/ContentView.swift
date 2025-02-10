@@ -168,8 +168,8 @@ struct ContentView: View {
             URLSession.shared.dataTask(with: requestUrl) { data, response, error in
                 if let data = data, let response = try? JSONDecoder().decode(YouTubeResponse.self, from: data) {
                     DispatchQueue.main.async {
-                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id, title: $0.snippet.title, channelId: channelId, duration: $0.contentDetails.duration) })
-                        videos = fetchedVideos.sorted { $0.id > $1.id }
+                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id.videoId ?? "neznan", title: $0.snippet.title, channelId: channelId, duration: "", publishedAt: $0.snippet.publishedAt)  })
+                        videos = fetchedVideos.sorted { $0.publishedAt > $1.publishedAt }
                     }
                 } else {print(response)}
             }.resume()
@@ -183,13 +183,17 @@ struct YouTubeResponse: Codable {
 }
 
 struct YouTubeVideo: Codable {
-    let id: String
+    let id: VideoID
     let snippet: Snippet
-    let contentDetails: ContentDetails
+}
+
+struct VideoID: Codable {
+    let videoId: String?
 }
 
 struct Snippet: Codable {
     let title: String
+    let publishedAt: String
 }
 
 struct ContentDetails: Codable {
@@ -214,6 +218,7 @@ struct Video: Identifiable {
     let title: String
     let channelId: String
     let duration: String
+    let publishedAt: String
 }
 
 // Pogled za prikaz videov
