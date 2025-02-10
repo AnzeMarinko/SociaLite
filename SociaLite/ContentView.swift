@@ -161,23 +161,88 @@ struct ContentView: View {
         guard !apiKey.isEmpty else { return }
         
         var fetchedVideos: [Video] = []
-        
+        var videoIds: [String] = []
+
+        let group = DispatchGroup() // Za sinhronizacijo klicev
+
         for channelId in channels.keys {
             let url = "https://www.googleapis.com/youtube/v3/search?key=\(apiKey)&channelId=\(channelId)&part=snippet,id&order=date&maxResults=3"
             
             guard let requestUrl = URL(string: url) else { continue }
-            
-            URLSession.shared.dataTask(with: requestUrl) { data, response, error in
+
+            group.enter()
+            URLSession.shared.dataTask(with: requestUrl) { data, _, error in
+                defer { group.leave() }
                 if let data = data, let response = try? JSONDecoder().decode(YouTubeResponse.self, from: data) {
                     DispatchQueue.main.async {
-                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id.videoId ?? "neznan", title: $0.snippet.title, channelName: $0.snippet.channelTitle, duration: "", publishedAt: $0.snippet.publishedAt, description: $0.snippet.description)  })
-                        videos = fetchedVideos.sorted { $0.publishedAt > $1.publishedAt }
+                        let newVideos = response.items.compactMap { item -> Video? in
+                            guard let videoId = item.id.videoId else { return nil }
+                            videoIds.append(videoId)
+                            return Video(id: videoId, title: item.snippet.title, channelName: item.snippet.channelTitle, duration: "", publishedAt: item.snippet.publishedAt, description: item.snippet.description)
+                        }
+                        fetchedVideos.append(contentsOf: newVideos)
                     }
                 }
             }.resume()
         }
+
+        group.notify(queue: .main) {
+            fetchVideoDurations(for: videoIds) { durations in
+                for i in fetchedVideos.indices {
+                    if let duration = durations[fetchedVideos[i].id] {
+                        fetchedVideos[i].duration = duration
+                    }
+                }
+                videos = fetchedVideos.sorted { $0.publishedAt > $1.publishedAt }
+            }
+        }
+    }
+
+    func fetchVideoDurations(for videoIds: [String], completion: @escaping ([String: String]) -> Void) {
+        guard !apiKey.isEmpty, !videoIds.isEmpty else {
+            completion([:])
+            return
+        }
+
+        let url = "https://www.googleapis.com/youtube/v3/videos?key=\(apiKey)&id=\(videoIds.joined(separator: ","))&part=contentDetails"
+
+        guard let requestUrl = URL(string: url) else {
+            completion([:])
+            return
+        }
+
+        URLSession.shared.dataTask(with: requestUrl) { data, _, error in
+            var durations: [String: String] = [:]
+            if let data = data, let response = try? JSONDecoder().decode(YouTubeVideoDetailsResponse.self, from: data) {
+                for item in response.items {
+                    durations[item.id] = formatDuration(item.contentDetails.duration)
+                }
+            }
+            DispatchQueue.main.async {
+                completion(durations)
+            }
+        }.resume()
+    }
+
+    // Funkcija za formatiranje trajanja videa v format "mm:ss"
+    func formatDuration(_ duration: String) -> String {
+        let regex = try? NSRegularExpression(pattern: "PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?", options: [])
+        if let match = regex?.firstMatch(in: duration, options: [], range: NSRange(duration.startIndex..., in: duration)) {
+            let hours = match.range(at: 1).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 1)) : "00"
+            let minutes = match.range(at: 2).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 2)) : "00"
+            let seconds = match.range(at: 3).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 3)) : "00"
+
+            var result = ""
+            if hours != "0" { result += "\(hours) h " }
+            if minutes != "0" { result += "\(minutes) min " }
+            if seconds != "0" { result += "\(seconds) s" }
+            
+            return result.trimmingCharacters(in: .whitespaces)
+        }
+        return "Neznana dolžina"
     }
 }
+
 
 // Modeli za dekodiranje JSON odgovora
 struct YouTubeResponse: Codable {
@@ -198,6 +263,15 @@ struct Snippet: Codable {
     let publishedAt: String
     let channelTitle: String
     let description: String
+}
+
+struct YouTubeVideoDetailsResponse: Codable {
+    let items: [YouTubeVideoDetails]
+}
+
+struct YouTubeVideoDetails: Codable {
+    let id: String
+    let contentDetails: ContentDetails
 }
 
 struct ContentDetails: Codable {
@@ -221,7 +295,7 @@ struct Video: Identifiable {
     let id: String
     let title: String
     let channelName: String
-    let duration: String
+    var duration: String
     let publishedAt: String
     let description: String
 }
@@ -241,25 +315,13 @@ struct VideoView: View {
                 .padding(.horizontal, 4)
             
             // Prikaz dolžine videa
-            Text(formatDuration(video.duration))
+            Text(video.duration)
                 .font(.subheadline)
                 .foregroundColor(.gray)
         }
         .background(Color.gray.opacity(0.2))
         .cornerRadius(10)
         .padding()
-    }
-    
-    // Funkcija za formatiranje trajanja videa v format "mm:ss"
-    func formatDuration(_ duration: String) -> String {
-        // Format dolžine videa je npr. "PT1M30S"
-        let regex = try? NSRegularExpression(pattern: "(\\d+)M(\\d+)S", options: [])
-        if let match = regex?.firstMatch(in: duration, options: [], range: NSRange(duration.startIndex..., in: duration)) {
-            let minutes = (duration as NSString).substring(with: match.range(at: 1))
-            let seconds = (duration as NSString).substring(with: match.range(at: 2))
-            return "\(minutes) min \(seconds) sek"
-        }
-        return "Neznana dolžina"
     }
 }
 
