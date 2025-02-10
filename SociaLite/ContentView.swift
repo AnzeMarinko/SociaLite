@@ -40,6 +40,9 @@ struct ContentView: View {
                     }
                     .navigationTitle("SociaLite").foregroundColor(.orange)
                     .preferredColorScheme(.dark)  // Aktiviraj temni način
+                    .onAppear {
+                        loadVideos()
+                    }
                 }
             }
             
@@ -194,6 +197,7 @@ struct ContentView: View {
                     }
                 }
                 videos = fetchedVideos.sorted { $0.publishedAt > $1.publishedAt }
+                saveVideos()
             }
         }
     }
@@ -228,9 +232,9 @@ struct ContentView: View {
     func formatDuration(_ duration: String) -> String {
         let regex = try? NSRegularExpression(pattern: "PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?", options: [])
         if let match = regex?.firstMatch(in: duration, options: [], range: NSRange(duration.startIndex..., in: duration)) {
-            let hours = match.range(at: 1).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 1)) : "00"
-            let minutes = match.range(at: 2).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 2)) : "00"
-            let seconds = match.range(at: 3).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 3)) : "00"
+            let hours = match.range(at: 1).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 1)) : "0"
+            let minutes = match.range(at: 2).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 2)) : "0"
+            let seconds = match.range(at: 3).location != NSNotFound ? (duration as NSString).substring(with: match.range(at: 3)) : "0"
 
             var result = ""
             if hours != "0" { result += "\(hours) h " }
@@ -240,6 +244,19 @@ struct ContentView: View {
             return result.trimmingCharacters(in: .whitespaces)
         }
         return "Neznana dolžina"
+    }
+
+    func saveVideos() {
+        if let encoded = try? JSONEncoder().encode(videos) {
+            UserDefaults.standard.set(encoded, forKey: "savedVideos")
+        }
+    }
+
+    func loadVideos() {
+        if let savedData = UserDefaults.standard.data(forKey: "savedVideos"),
+        let decodedVideos = try? JSONDecoder().decode([Video].self, from: savedData) {
+            videos = decodedVideos
+        }
     }
 }
 
@@ -291,7 +308,7 @@ struct ChannelSnippet: Codable {
 }
 
 // Model videa
-struct Video: Identifiable {
+struct Video: Identifiable, Codable {
     let id: String
     let title: String
     let channelName: String
@@ -306,6 +323,17 @@ struct VideoView: View {
 
     var body: some View {
         VStack {
+            HStack {
+                Text(video.channelName)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                Spacer()
+                
+                Text("⏱️ \(video.duration)")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+            }
+            
             WebView(url: URL(string: "https://www.youtube-nocookie.com/embed/\(video.id)?rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=1")!)
                 .frame(height: 200)
             
@@ -313,11 +341,6 @@ struct VideoView: View {
                 .font(.caption)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 4)
-            
-            // Prikaz dolžine videa
-            Text(video.duration)
-                .font(.subheadline)
-                .foregroundColor(.gray)
         }
         .background(Color.gray.opacity(0.2))
         .cornerRadius(10)
