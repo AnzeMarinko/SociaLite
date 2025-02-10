@@ -15,11 +15,20 @@ struct ContentView: View {
         ZStack {
             NavigationView {
                 VStack {
-                    // Gumb za nastavitve
-                    Button("⚙️ Nastavitve") {
-                        showSettings.toggle()
+                    HStack {
+                        // Gumb za nastavitve
+                        Button("⚙️ Nastavitve") {
+                            showSettings.toggle()
+                        }
+                        .foregroundColor(.orange)
+                        Spacer()
+                        
+                        // Gumb za osvežitev videov
+                        Button("🔄 Osveži videe") {
+                            fetchVideos()
+                        }
+                        .foregroundColor(.orange)
                     }
-                    .padding()
                     
                     // Seznam videov
                     ScrollView {
@@ -29,15 +38,8 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .navigationTitle("SociaLite")
+                    .navigationTitle("SociaLite").foregroundColor(.orange)
                     .preferredColorScheme(.dark)  // Aktiviraj temni način
-                    
-                    // Gumb za osvežitev videov
-                    Button("🔄 Osveži videe") {
-                        fetchVideos()
-                    }
-                    .padding()
-                    .foregroundColor(.blue)
                 }
             }
             
@@ -168,10 +170,10 @@ struct ContentView: View {
             URLSession.shared.dataTask(with: requestUrl) { data, response, error in
                 if let data = data, let response = try? JSONDecoder().decode(YouTubeResponse.self, from: data) {
                     DispatchQueue.main.async {
-                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id.videoId ?? "neznan", title: $0.snippet.title, channelId: channelId, duration: "", publishedAt: $0.snippet.publishedAt)  })
+                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id.videoId ?? "neznan", title: $0.snippet.title, channelName: $0.snippet.channelTitle, duration: "", publishedAt: $0.snippet.publishedAt, description: $0.snippet.description)  })
                         videos = fetchedVideos.sorted { $0.publishedAt > $1.publishedAt }
                     }
-                } else {print(response)}
+                }
             }.resume()
         }
     }
@@ -194,6 +196,8 @@ struct VideoID: Codable {
 struct Snippet: Codable {
     let title: String
     let publishedAt: String
+    let channelTitle: String
+    let description: String
 }
 
 struct ContentDetails: Codable {
@@ -216,9 +220,10 @@ struct ChannelSnippet: Codable {
 struct Video: Identifiable {
     let id: String
     let title: String
-    let channelId: String
+    let channelName: String
     let duration: String
     let publishedAt: String
+    let description: String
 }
 
 // Pogled za prikaz videov
