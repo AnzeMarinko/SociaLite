@@ -6,9 +6,9 @@ struct ContentView: View {
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "apiKey") ?? ""
     @State private var inputAPIKey: String = ""  // Lokalna spremenljivka za vnos
     @State private var channelId: String = ""
+    @State private var inputChannelId: String = ""
     @State private var channelName: String = ""
     @State private var channels: [String: String] = UserDefaults.standard.dictionary(forKey: "channels") as? [String: String] ?? [:]
-    @State private var hiddenChannels: [String] = UserDefaults.standard.stringArray(forKey: "hiddenChannels") ?? []
     @State private var videos: [Video] = []
     
     var body: some View {
@@ -23,8 +23,8 @@ struct ContentView: View {
                     
                     // Seznam videov
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) {
-                            ForEach(videos.filter { !hiddenChannels.contains($0.channelId) }, id: \.id) { video in
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 250))]) {
+                            ForEach(videos, id: \.id) { video in
                                 VideoView(video: video)
                             }
                         }
@@ -50,7 +50,6 @@ struct ContentView: View {
                             Button("❌ Zapri nastavitve") {
                                 showSettings.toggle()
                             }
-                            .padding()
                             Spacer()
                         }
                     
@@ -59,26 +58,10 @@ struct ContentView: View {
                                 HStack {
                                     Text(channels[channelId] ?? "Neznan kanal")
                                     Spacer()
-                                    
-                                    // Gumb za skritje ali prikaz kanala
-                                    if hiddenChannels.contains(channelId) {
-                                        Button("👁 Prikaži") {
-                                            hiddenChannels.removeAll { $0 == channelId }
-                                            UserDefaults.standard.setValue(hiddenChannels, forKey: "hiddenChannels")
-                                        }
-                                    } else {
-                                        Button("🙈 Skrij") {
-                                            hiddenChannels.append(channelId)
-                                            UserDefaults.standard.setValue(hiddenChannels, forKey: "hiddenChannels")
-                                        }
-                                    }
 
                                     Button("🗑 Odstrani") {
                                         channels.removeValue(forKey: channelId)
                                         UserDefaults.standard.setValue(channels, forKey: "channels")
-                                        // Skrbno odstrani tudi skrite kanale
-                                        hiddenChannels.removeAll { $0 == channelId }
-                                        UserDefaults.standard.setValue(hiddenChannels, forKey: "hiddenChannels")
                                     }
                                     .foregroundColor(.red)
                                 }
@@ -112,15 +95,16 @@ struct ContentView: View {
                         }
                         
                         Section(header: Text("📺 Dodaj YouTube kanal")) {
-                            TextField("Vnesi ID kanala", text: $channelId)
+                            TextField("Vnesi ID kanala", text: $inputChannelId)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                             
                             Button("➕ Dodaj kanal") {
-                                fetchChannelName(from: channelId)
-                                if !channelId.isEmpty && !channelName.isEmpty {
-                                    channels[channelId] = channelName
+                                fetchChannelName(from: inputChannelId)
+                                print("channelName: \(channelName)")
+                                if !inputChannelId.isEmpty && !channelName.isEmpty {
+                                    channels[inputChannelId] = channelName
                                     UserDefaults.standard.setValue(channels, forKey: "channels")
-                                    channelId = ""
+                                    inputChannelId = ""
                                     channelName = ""
                                     fetchVideos()  // Po dodajanju kanala osveži videe
                                 }
@@ -150,10 +134,10 @@ struct ContentView: View {
         }
     }
     
-    func fetchChannelName(from channelId: String) {
+    func fetchChannelName(from inputChannelId: String) {
         guard !apiKey.isEmpty else { return }
         
-        let url = "https://www.googleapis.com/youtube/v3/channels?key=\(apiKey)&id=\(channelId)&part=snippet"
+        let url = "https://www.googleapis.com/youtube/v3/channels?key=\(apiKey)&id=\(inputChannelId)&part=snippet"
         guard let requestUrl = URL(string: url) else { return }
         
         URLSession.shared.dataTask(with: requestUrl) { data, _, error in
@@ -175,31 +159,20 @@ struct ContentView: View {
         guard !apiKey.isEmpty else { return }
         
         var fetchedVideos: [Video] = []
-        let group = DispatchGroup()  // Uporabimo DispatchGroup za usklajevanje asinhronih nalog
         
         for channelId in channels.keys {
-            let url = "https://www.googleapis.com/youtube/v3/videos?key=\(apiKey)&channelId=\(channelId)&part=snippet,contentDetails&maxResults=3"
+            let url = "https://www.googleapis.com/youtube/v3/search?key=\(apiKey)&channelId=\(channelId)&part=snippet,id&order=date&maxResults=3"
+            
             guard let requestUrl = URL(string: url) else { continue }
             
-            group.enter()  // Vstopimo v DispatchGroup za spremljanje naloge
-            
-            URLSession.shared.dataTask(with: requestUrl) { data, _, error in
-                if let error = error {
-                    print("Napaka pri nalaganju podatkov: \(error.localizedDescription)")
-                    return
-                }
+            URLSession.shared.dataTask(with: requestUrl) { data, response, error in
                 if let data = data, let response = try? JSONDecoder().decode(YouTubeResponse.self, from: data) {
-                    print("data: \(data)")
-                    fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id, title: $0.snippet.title, channelId: channelId, duration: $0.contentDetails.duration) })
-                }
-                group.leave()  // Opuščamo nalogo v DispatchGroup
+                    DispatchQueue.main.async {
+                        fetchedVideos.append(contentsOf: response.items.map { Video(id: $0.id, title: $0.snippet.title, channelId: channelId, duration: $0.contentDetails.duration) })
+                        videos = fetchedVideos.sorted { $0.id > $1.id }
+                    }
+                } else {print(response)}
             }.resume()
-        }
-        print("fetchedVideos: \(fetchedVideos)")
-        
-        // Počakamo, da se vse naloge zaključijo, nato posodobimo stanje
-        group.notify(queue: .main) {
-            self.videos = fetchedVideos.sorted { $0.id > $1.id }
         }
     }
 }
