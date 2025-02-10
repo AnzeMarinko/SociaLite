@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import AVFoundation
 
 struct ContentView: View {
     @State private var showSettings = false
@@ -367,6 +368,14 @@ struct WebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
 
+        // Nastavi AVAudioSession za predvajanje zvoka v ozadju
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: .mixWithOthers)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Napaka pri nastavljanju AVAudioSession: \(error.localizedDescription)")
+        }
+
         // Omogoči predvajanje medijev v aplikaciji
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true // Omogoči predvajanje video vsebine v aplikaciji (inline)
@@ -376,7 +385,7 @@ struct WebView: UIViewRepresentable {
         // Prepreči izklop zaslona med predvajanjem videa
         UIApplication.shared.isIdleTimerDisabled = true
 
-        // Počisti settinge, ko aplikacija preide v ozadje (ko uporabnik zapusti aplikacijo)
+        // Počisti nastavitve, ko aplikacija preide v ozadje
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
             UIApplication.shared.isIdleTimerDisabled = false // Omogoči ponovno spanje zaslona, ko gre aplikacija v ozadje
         }
